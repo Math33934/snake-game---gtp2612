@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake — Jogo da Cobrinha</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #08111f; --panel: #101d30; --panel2: #15253b;
+    --text: #edf5ff; --muted: #9eb0c8; --green: #69f0ae;
+    --green2: #27c981; --red: #ff657a; --line: #263a54;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px;
+    display: grid; place-items: center;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    color: var(--text);
+    background: radial-gradient(ellipse at top, #142943 0%, var(--bg) 60%);
+  }
+  button { font: inherit; cursor: pointer; }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  .app { width: min(100%, 680px); }
+  header { text-align: center; margin-bottom: 20px; }
+  .eyebrow { color: var(--green); text-transform: uppercase; letter-spacing: .22em; font-size: .75rem; font-weight: 800; }
+  h1 { margin: 5px 0 4px; font-size: clamp(2rem, 7vw, 3.25rem); letter-spacing: -.05em; }
+  .subtitle { color: var(--muted); margin: 0; }
+  .panel { background: rgba(16,29,48,.94); border: 1px solid var(--line); border-radius: 22px; padding: clamp(12px, 3vw, 22px); box-shadow: 0 24px 70px #0005; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .stat { padding: 12px 16px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+  .stat-label { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; }
+  .stat-value { font-size: 1.65rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .game-wrap { position: relative; overflow: hidden; border: 1px solid #34506b; border-radius: 16px; background: #091625; }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; touch-action: none; }
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; background: #06101dcc; backdrop-filter: blur(4px); }
+  .overlay[hidden] { display: none; }
+  .overlay-card { max-width: 340px; }
+  .overlay h2 { margin: 0 0 8px; font-size: clamp(1.5rem, 5vw, 2rem); }
+  .overlay p { color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
+  .btn { border: 1px solid transparent; border-radius: 12px; padding: 11px 18px; font-weight: 800; transition: transform .15s, filter .15s; }
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .primary { background: var(--green); color: #062018; }
+  .secondary { background: #1a2b42; color: var(--text); border-color: #314761; }
+  .secondary:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .help { color: var(--muted); text-align: center; font-size: .88rem; line-height: 1.6; margin: 16px 4px 0; }
+  kbd { display: inline-block; min-width: 25px; padding: 2px 6px; border: 1px solid #40546c; border-radius: 5px; color: var(--text); background: #1a2a40; font: inherit; font-size: .78rem; }
+  .mobile-controls { display: none; margin: 16px auto 0; width: 176px; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .direction { min-height: 48px; border: 1px solid #344b65; background: #1a2b42; color: var(--text); border-radius: 12px; font-size: 1.25rem; font-weight: 800; touch-action: manipulation; user-select: none; }
+  .direction:active { background: #2a4562; }
+  .direction.up { grid-column: 2; } .direction.left { grid-column: 1; grid-row: 2; }
+  .direction.down { grid-column: 2; grid-row: 2; } .direction.right { grid-column: 3; grid-row: 2; }
+  .footer { text-align: center; color: #71849e; font-size: .75rem; margin-top: 16px; }
+  @media (pointer: coarse), (max-width: 600px) { .mobile-controls { display: grid; } }
+  @media (max-width: 480px) { body { padding: 14px; } .stat { padding: 10px 12px; } .stat-value { font-size: 1.4rem; } .panel { border-radius: 17px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <div class="eyebrow">Arcade clássico</div>
+    <h1>Snake<span style="color:var(--green)">.</span></h1>
+    <p class="subtitle">Coma, cresça e bata seu recorde.</p>
+  </header>
+
+  <section class="panel" aria-label="Jogo da cobrinha">
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Pontuação</div><div class="stat-value" id="score">0</div></div>
+      <div class="stat"><div class="stat-label">Recorde</div><div class="stat-value" id="best">0</div></div>
+    </div>
+
+    <div class="game-wrap">
+      <canvas id="game" width="480" height="480" aria-label="Área do jogo Snake"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlay-title">Pronto para jogar?</h2>
+          <p id="overlay-message">Use as setas ou WASD para controlar a cobrinha. Não bata nas paredes nem em si mesmo!</p>
+          <button class="btn primary" id="start-btn">Começar jogo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn secondary" id="pause-btn" disabled>Pausar</button>
+      <button class="btn secondary" id="restart-btn">Reiniciar</button>
+    </div>
+
+    <div class="mobile-controls" aria-label="Controles direcionais">
+      <button class="direction up" data-dir="up" aria-label="Cima">▲</button>
+      <button class="direction left" data-dir="left" aria-label="Esquerda">◀</button>
+      <button class="direction down" data-dir="down" aria-label="Baixo">▼</button>
+      <button class="direction right" data-dir="right" aria-label="Direita">▶</button>
+    </div>
+
+    <p class="help">
+      Mover: <kbd>↑</kbd> <kbd>←</kbd> <kbd>↓</kbd> <kbd>→</kbd> ou <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>
+      <br>Pause ou retome com <kbd>Espaço</kbd>. No celular, use os botões direcionais.
+    </p>
+  </section>
+  <div class="footer">Feito com HTML, CSS e JavaScript puro · Sem dependências externas</div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // Configurações do tabuleiro: 24 × 24 células.
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const cells = 24;
+  const cellSize = canvas.width / cells;
+  const scoreElement = document.getElementById("score");
+  const bestElement = document.getElementById("best");
+  const overlay = document.getElementById("overlay");
+  const overlayTitle = document.getElementById("overlay-title");
+  const overlayMessage = document.getElementById("overlay-message");
+  const startButton = document.getElementById("start-btn");
+  const pauseButton = document.getElementById("pause-btn");
+  const restartButton = document.getElementById("restart-btn");
+
+  const directions = {
+    up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }, right: { x: 1, y: 0 }
+  };
+  const opposite = { up: "down", down: "up", left: "right", right: "left" };
+
+  let snake, food, direction, nextDirection, score, bestScore;
+  let state = "ready"; // ready, running, paused, over
+  let lastStep = 0;
+  let animationId = null;
+
+  // A leitura do localStorage é protegida para funcionar mesmo se estiver bloqueado.
+  function loadBestScore() {
+    try { return Number.parseInt(localStorage.getItem("snakeBest") || "0", 10) || 0; }
+    catch (_) { return 0; }
+  }
+  function saveBestScore(value) {
+    try { localStorage.setItem("snakeBest", String(value)); } catch (_) { /* armazenamento indisponível */ }
+  }
+
+  function resetGame() {
+    const middle = Math.floor(cells / 2);
+    snake = [
+      { x: middle, y: middle },
+      { x: middle - 1, y: middle },
+      { x: middle - 2, y: middle }
+    ];
+    direction = "right";
+    nextDirection = "right";
+    score = 0;
+    food = createFood();
+    scoreElement.textContent = score;
+    bestElement.textContent = bestScore;
+    lastStep = 0;
+    draw();
+  }
+
+  // Sorteia uma célula livre, evitando que o alimento apareça dentro da cobra.
+  function createFood() {
+    const freeCells = [];
+    for (let y = 0; y < cells; y++) {
+      for (let x = 0; x < cells; x++) {
+        if (!snake.some(segment => segment.x === x && segment.y === y)) freeCells.push({ x, y });
+      }
+    }
+    if (freeCells.length === 0) return null;
+    return freeCells[Math.floor(Math.random() * freeCells.length)];
+  }
+
+  function startGame() {
+    if (state === "running") return;
+    if (state === "ready" || state === "over") resetGame();
+    state = "running";
+    overlay.hidden = true;
+    pauseButton.disabled = false;
+    pauseButton.textContent = "Pausar";
+    startButton.textContent = "Continuar";
+    lastStep = 0;
+    if (animationId === null) animationId = requestAnimationFrame(gameLoop);
+  }
+
+  function togglePause() {
+    if (state === "running") {
+      state = "paused";
+      showOverlay("Jogo pausado", "Respire um pouco. Quando estiver pronto, continue a partida.", "Continuar");
+      pauseButton.textContent = "Retomar";
+    } else if (state === "paused") {
+      state = "running";
+      overlay.hidden = true;
+      pauseButton.textContent = "Pausar";
+      lastStep = 0;
+      if (animationId === null) animationId = requestAnimationFrame(gameLoop);
+    }
+  }
+
+  function endGame(won = false) {
+    state = "over";
+    pauseButton.disabled = true;
+    pauseButton.textContent = "Pausar";
+    showOverlay(won ? "Você venceu!" : "Fim de jogo!", `Pontuação final: ${score}. ${won ? "Você ocupou todo o tabuleiro!" : "Vamos tentar bater esse recorde?"}`, "Jogar novamente");
+  }
+
+  function showOverlay(title, message, buttonText) {
+    overlayTitle.textContent = title;
+    overlayMessage.textContent = message;
+    startButton.textContent = buttonText;
+    overlay.hidden = false;
+  }
+
+  function changeDirection(newDirection) {
+    if (!directions[newDirection] || state === "over") return;
+    // Impede uma inversão de 180° em relação à direção atual.
+    if (newDirection === opposite[direction]) return;
+    nextDirection = newDirection;
+    if (state === "ready") {
+      // O primeiro comando direcional pode iniciar o jogo.
+      startGame();
+    }
+  }
+
+  function update() {
+    direction = nextDirection;
+    const vector = directions[direction];
+    const head = { x: snake[0].x + vector.x, y: snake[0].y + vector.y };
+    const eating = food && head.x === food.x && head.y === food.y;
+
+    // Se não for comer, a cauda sai nesta jogada; por isso, sua célula pode ser ocupada.
+    const bodyToCheck = eating ? snake : snake.slice(0, -1);
+    const hitWall = head.x < 0 || head.x >= cells || head.y < 0 || head.y >= cells;
+    const hitSelf = bodyToCheck.some(segment => segment.x === head.x && segment.y === head.y);
+    if (hitWall || hitSelf) { endGame(); return; }
+
+    snake.unshift(head);
+    if (eating) {
+      score += 10;
+      scoreElement.textContent = score;
+      if (score > bestScore) {
+        bestScore = score;
+        bestElement.textContent = bestScore;
+        saveBestScore(bestScore);
+      }
+      food = createFood();
+      if (!food) { draw(); endGame(true); return; }
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#091625";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grade discreta para reforçar a estética arcade.
+    ctx.strokeStyle = "rgba(104, 137, 169, 0.10)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= cells; i++) {
+      const p = i * cellSize;
+      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(canvas.width, p); ctx.stroke();
+    }
+
+    if (food) {
+      const cx = (food.x + .5) * cellSize, cy = (food.y + .5) * cellSize;
+      ctx.shadowColor = "#ff657a"; ctx.shadowBlur = 14;
+      ctx.fillStyle = "#ff657a";
+      ctx.beginPath(); ctx.arc(cx, cy, cellSize * .32, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#ffd4da";
+      ctx.beginPath(); ctx.arc(cx - 2, cy - 2, cellSize * .09, 0, Math.PI * 2); ctx.fill();
+    }
+
+    snake.forEach((segment, index) => {
+      const inset = index === 0 ? 1.5 : 2;
+      const x = segment.x * cellSize + inset, y = segment.y * cellSize + inset;
+      const size = cellSize - inset * 2;
+      ctx.fillStyle = index === 0 ? "#b7ffd9" : `hsl(150, ${Math.max(48, 76 - index)}%, ${Math.max(34, 57 - index * .35)}%)`;
+      ctx.shadowColor = index === 0 ? "#69f0ae" : "transparent";
+      ctx.shadowBlur = index === 0 ? 10 : 0;
+      roundedRect(ctx, x, y, size, size, index === 0 ? 5 : 4);
+      ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+
+    // Olhos voltados para a direção atual.
+    const head = snake[0];
+    if (head) {
+      const cx = (head.x + .5) * cellSize, cy = (head.y + .5) * cellSize;
+      let eyes;
+      if (direction === "right") eyes = [[cx + 3, cy - 3], [cx + 3, cy + 3]];
+      else if (direction === "left") eyes = [[cx - 3, cy - 3], [cx - 3, cy + 3]];
+      else if (direction === "up") eyes = [[cx - 3, cy - 3], [cx + 3, cy - 3]];
+      else eyes = [[cx - 3, cy + 3], [cx + 3, cy + 3]];
+      ctx.fillStyle = "#08251a";
+      eyes.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill(); });
+    }
+  }
+
+  function roundedRect(context, x, y, width, height, radius) {
+    context.beginPath();
+    context.roundRect(x, y, width, height, radius);
+  }
+
+  function gameLoop(timestamp) {
+    animationId = null;
+    if (state !== "running") return;
+    if (!lastStep) lastStep = timestamp;
+    const stepDuration = Math.max(70, 125 - Math.floor(score / 50) * 4);
+    if (timestamp - lastStep >= stepDuration) {
+      update();
+      lastStep = timestamp;
+    }
+    if (state === "running") animationId = requestAnimationFrame(gameLoop);
+  }
+
+  document.addEventListener("keydown", event => {
+    const key = event.key.toLowerCase();
+    const keyMap = {
+      arrowup: "up", w: "up", arrowdown: "down", s: "down",
+      arrowleft: "left", a: "left", arrowright: "right", d: "right"
+    };
+    if (keyMap[key]) {
+      event.preventDefault();
+      changeDirection(keyMap[key]);
+    } else if (key === " " || key === "spacebar") {
+      event.preventDefault();
+      if (state === "ready" || state === "over") startGame();
+      else togglePause();
+    } else if (key === "enter" && (state === "ready" || state === "over")) {
+      startGame();
+    }
+  });
+
+  document.querySelectorAll("[data-dir]").forEach(button => {
+    const handleDirection = event => {
+      event.preventDefault();
+      changeDirection(button.dataset.dir);
+    };
+    button.addEventListener("pointerdown", handleDirection);
+    button.addEventListener("click", handleDirection);
+  });
+
+  startButton.addEventListener("click", () => {
+    if (state === "paused") togglePause();
+    else startGame();
+  });
+  pauseButton.addEventListener("click", togglePause);
+  restartButton.addEventListener("click", () => {
+    state = "ready";
+    resetGame();
+    pauseButton.disabled = true;
+    showOverlay("Nova partida", "Tudo pronto. Use as setas ou WASD para começar.", "Começar jogo");
+  });
+
+  // Pausa automaticamente quando a aba perde o foco, evitando jogadas inesperadas.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state === "running") togglePause();
+  });
+
+  bestScore = loadBestScore();
+  bestElement.textContent = bestScore;
+  resetGame();
+})();
+</script>
+</body>
+</html>
